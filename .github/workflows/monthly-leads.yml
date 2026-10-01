@@ -1,0 +1,55 @@
+name: Monthly leads
+
+on:
+  schedule:
+    - cron: "0 8 1 * *"
+      timezone: America/Chicago
+  workflow_dispatch:
+    inputs:
+      month:
+        description: "Month to search, as YYYY-MM. Leave empty for the previous month."
+        required: false
+        type: string
+
+concurrency:
+  group: monthly-leads
+  cancel-in-progress: false
+
+jobs:
+  leads:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Search and email
+        env:
+          PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          REPORT_TO: ${{ secrets.REPORT_TO }}
+          REPORT_FROM: ${{ secrets.REPORT_FROM }}
+          MONTH: ${{ inputs.month }}
+        run: |
+          if [ -n "$MONTH" ]; then
+            if ! [[ "$MONTH" =~ ^[0-9]{4}-[0-9]{2}$ ]]; then
+              echo "Month must look like 2026-09."
+              exit 1
+            fi
+            npm run leads -- --month "$MONTH"
+          else
+            npm run leads
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: leads-${{ inputs.month || 'previous-month' }}
+          path: out/
+          if-no-files-found: warn

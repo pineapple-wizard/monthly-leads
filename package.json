@@ -1,0 +1,14 @@
+{
+  "name": "monthly-leads",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "leads": "node --experimental-strip-types src/run.ts",
+    "test": "node --experimental-strip-types --test src/period.test.ts src/report.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "typescript": "^5.9.2"
+  }
+}
