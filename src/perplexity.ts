@@ -28,6 +28,7 @@ const LEAD_SCHEMA = {
           "last_activity_date",
           "city",
           "note",
+          "already_open",
           "source_titles",
         ],
         properties: {
@@ -48,6 +49,7 @@ const LEAD_SCHEMA = {
           last_activity_date: { type: "string" },
           city: { type: "string" },
           note: { type: "string" },
+          already_open: { type: "boolean" },
           source_titles: { type: "array", items: { type: "string" } },
         },
       },
@@ -56,12 +58,16 @@ const LEAD_SCHEMA = {
 } as const;
 
 const INSTRUCTIONS = [
-  "Extract upcoming hospitality venues from current web coverage.",
+  "Extract hotels, restaurants, nightclubs, and bars that are not open yet.",
   "Return JSON only, matching the schema.",
-  "Include a venue only when a source published during the requested window reports that it is planned, under construction, being renovated, being converted, opening soon, or opened during that window.",
-  "Hotels, restaurants, nightclubs, and bars count. A lounge or music venue counts as a nightclub only when it operates as nightlife.",
-  "Omit venues that have been open for a long time and have no development news in the window.",
-  "Do not invent venues, dates, or addresses. If a date is not stated, use \"unknown\".",
+  "Include a venue when a source published during the requested window says it is planned, under construction, or scheduled to open on a future date.",
+  "Also include an old, closed, or existing building that is being converted, redeveloped, or redefined into a new hotel, restaurant, nightclub, or bar, as long as that new venue has not opened.",
+  "Omit a venue guests can already visit, including one that opened during the report window.",
+  "Omit a refresh or remodel of a venue that is still operating as the same open business.",
+  "Set already_open to true only when guests can visit now. Set it to false when the new venue has not opened, even if the building used to be something else.",
+  "expected_opening is when the new venue is expected to open. That is the time remaining before opening. Use the most specific timing the source states, such as a date, month, quarter, or season. Use \"unknown\" only when the source gives no timing.",
+  "A lounge or music venue counts as a nightclub only when it operates as nightlife.",
+  "Do not invent venues, dates, or addresses.",
   "source_titles must be article or page titles from the search results, not URLs.",
   "If nothing qualifies, return an empty leads array.",
 ].join(" ");
@@ -131,10 +137,20 @@ export async function searchLeads(search: SearchSpec, period: Period, apiKey: st
 }
 
 function buildInput(search: SearchSpec, period: Period): string {
+  const today = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Chicago",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date());
   return [
     `Find hospitality venues in ${search.places}.`,
     `Report window: ${period.rangeLabel}.`,
-    `Only include a venue when a source published inside that window supports it.`,
+    `Today is ${today}.`,
+    `Only include a venue when a source published inside that window supports it, and guests still cannot visit it on ${today}.`,
+    `An old place being turned into a new hotel, restaurant, or nightclub counts when that new venue has not opened.`,
+    `Do not include a venue guests can already visit.`,
+    `Put the expected opening in expected_opening. That is the time remaining before the venue opens.`,
     `Focus: ${search.focus}.`,
     `Set city to the venue's own city.`,
     `Write the note in English, even if the source is in Spanish.`,
@@ -224,6 +240,7 @@ function parseLeads(text: string, search: SearchSpec, sources: Source[]): Lead[]
       lastActivityDate: clean(record.last_activity_date) || "unknown",
       city: clean(record.city) || search.places,
       note: clean(record.note),
+      alreadyOpen: record.already_open === true,
       region: search.region,
       sources: sourcesForLead(title, sourceTitles, sources),
     });

@@ -23,12 +23,24 @@ export type Report = {
   failures: SearchFailure[];
 };
 
-export function buildReport(period: Period, leads: Lead[], failures: SearchFailure[]): Report {
+export function buildReport(
+  period: Period,
+  leads: Lead[],
+  failures: SearchFailure[],
+  asOf: Date = new Date(),
+): Report {
   return {
     period,
-    leads: dedupeLeads(leads),
+    leads: dedupeLeads(leads.filter((lead) => isStillUpcoming(lead, asOf))),
     failures,
   };
+}
+
+export function isStillUpcoming(lead: Lead, asOf: Date): boolean {
+  if (lead.status === "opened" || lead.alreadyOpen) return false;
+  const deadline = openingDeadline(lead.expectedOpening);
+  if (!deadline) return true;
+  return deadline >= chicagoDay(asOf);
 }
 
 export function renderText(report: Report): string {
@@ -159,6 +171,74 @@ export function dedupeLeads(leads: Lead[]): Lead[] {
   }
 
   return order;
+}
+
+const MONTH_NUMBERS: Record<string, number> = {
+  january: 1,
+  february: 2,
+  march: 3,
+  april: 4,
+  may: 5,
+  june: 6,
+  july: 7,
+  august: 8,
+  september: 9,
+  october: 10,
+  november: 11,
+  december: 12,
+};
+
+function openingDeadline(value: string): string | null {
+  const text = value.trim().toLowerCase().replace(/,/g, "");
+  if (!text || text === "unknown") return null;
+
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (iso) return validDay(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+
+  const monthDayYear = /^([a-z]+)\s+(\d{1,2})\s+(\d{4})$/.exec(text);
+  if (monthDayYear) {
+    const month = MONTH_NUMBERS[monthDayYear[1] ?? ""];
+    if (!month) return null;
+    return validDay(Number(monthDayYear[3]), month, Number(monthDayYear[2]));
+  }
+
+  const monthYear = /^([a-z]+)\s+(\d{4})$/.exec(text);
+  if (monthYear) {
+    const month = MONTH_NUMBERS[monthYear[1] ?? ""];
+    if (!month) return null;
+    return lastDay(Number(monthYear[2]), month);
+  }
+
+  const quarter = /^q([1-4])\s+(\d{4})$/.exec(text);
+  if (quarter) return lastDay(Number(quarter[2]), Number(quarter[1]) * 3);
+
+  return null;
+}
+
+function validDay(year: number, month: number, day: number): string | null {
+  if (month < 1 || month > 12 || day < 1) return null;
+  const last = Number(lastDay(year, month).slice(8));
+  if (day > last) return null;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function lastDay(year: number, month: number): string {
+  const day = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function chicagoDay(date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Chicago",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  if (!year || !month || !day) throw new Error("Could not read the report date.");
+  return `${year}-${month}-${day}`;
 }
 
 function displayValue(value: string): string {

@@ -41,6 +41,7 @@ export type Lead = {
   lastActivityDate: string;
   city: string;
   note: string;
+  alreadyOpen: boolean;
   region: Region;
   sources: Source[];
 };
