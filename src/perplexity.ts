@@ -1,3 +1,4 @@
+import { MIN_LEAD_DAYS, minimumOpeningDay } from "./report.ts";
 import type { Lead, Period, SearchDepth, SearchSpec, Source, VenueStatus, VenueType } from "./types.ts";
 
 const VENUE_TYPES = new Set<VenueType>(["hotel", "restaurant", "nightclub", "bar"]);
@@ -60,15 +61,16 @@ const LEAD_SCHEMA = {
 const INSTRUCTIONS = [
   "Extract hotels, restaurants, nightclubs, and bars that are not open yet.",
   "Return JSON only, matching the schema.",
-  "Include a venue when a source published during the requested window says it is planned, under construction, or scheduled to open on a future date.",
+  `Include a venue when a source published during the requested window says it is planned, under construction, or scheduled to open at least ${MIN_LEAD_DAYS} days from today.`,
   "Also include an old, closed, or existing building that is being converted, redeveloped, or redefined into a new hotel, restaurant, nightclub, or bar, as long as that new venue has not opened.",
-  "Omit a venue guests can already visit, including one that opened during the report window.",
+  `Omit a venue guests can already visit, including one that opened during the report window. Also omit a venue expected to open in fewer than ${MIN_LEAD_DAYS} days.`,
   "Omit a refresh or remodel of a venue that is still operating as the same open business.",
   "Set already_open to true only when guests can visit now. Set it to false when the new venue has not opened, even if the building used to be something else.",
   "expected_opening is when the new venue is expected to open. That is the time remaining before opening. Use the most specific timing the source states, such as a date, month, quarter, or season. Use \"unknown\" only when the source gives no timing.",
   "A lounge or music venue counts as a nightclub only when it operates as nightlife.",
   "Do not invent venues, dates, or addresses.",
   "source_titles must be article or page titles from the search results, not URLs.",
+  "Return every distinct venue that qualifies. Do not stop after a few examples, and do not shorten the list to the best-known projects.",
   "If nothing qualifies, return an empty leads array.",
 ].join(" ");
 
@@ -77,6 +79,7 @@ type DepthSettings = {
   searchContextSize: "low" | "medium" | "high";
   maxResults: number;
   maxOutputTokens: number;
+  maxSteps: number;
 };
 
 function depthSettings(depth: SearchDepth): DepthSettings {
@@ -84,15 +87,17 @@ function depthSettings(depth: SearchDepth): DepthSettings {
     return {
       preset: process.env.LEADS_PRESET_HEAVY || "low",
       searchContextSize: "high",
-      maxResults: 12,
-      maxOutputTokens: 8000,
+      maxResults: 50,
+      maxOutputTokens: 32000,
+      maxSteps: 8,
     };
   }
   return {
     preset: process.env.LEADS_PRESET_STANDARD || "fast",
-    searchContextSize: "medium",
-    maxResults: 8,
-    maxOutputTokens: 4000,
+    searchContextSize: "high",
+    maxResults: 50,
+    maxOutputTokens: 32000,
+    maxSteps: 5,
   };
 }
 
@@ -108,6 +113,7 @@ export async function searchLeads(search: SearchSpec, period: Period, apiKey: st
     instructions: INSTRUCTIONS,
     input: buildInput(search, period),
     max_output_tokens: depth.maxOutputTokens,
+    max_steps: depth.maxSteps,
     tools: [
       {
         type: "web_search",
@@ -137,20 +143,18 @@ export async function searchLeads(search: SearchSpec, period: Period, apiKey: st
 }
 
 function buildInput(search: SearchSpec, period: Period): string {
-  const today = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Chicago",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  }).format(new Date());
+  const today = new Date();
+  const todayLabel = longDate(today, "America/Chicago");
+  const earliestLabel = longDate(new Date(`${minimumOpeningDay(today)}T12:00:00Z`), "UTC");
   return [
     `Find hospitality venues in ${search.places}.`,
     `Report window: ${period.rangeLabel}.`,
-    `Today is ${today}.`,
-    `Only include a venue when a source published inside that window supports it, and guests still cannot visit it on ${today}.`,
-    `An old place being turned into a new hotel, restaurant, or nightclub counts when that new venue has not opened.`,
-    `Do not include a venue guests can already visit.`,
+    `Today is ${todayLabel}.`,
+    `Only include a venue when a source published inside that window supports it, guests still cannot visit it, and it is expected to open on ${earliestLabel} or later.`,
+    `An old place being turned into a new hotel, restaurant, or nightclub counts when that new venue has not opened and its opening is on ${earliestLabel} or later.`,
+    `Do not include a venue guests can already visit, or one opening before ${earliestLabel}.`,
     `Put the expected opening in expected_opening. That is the time remaining before the venue opens.`,
+    `Return every distinct venue that meets these rules. There is no maximum count.`,
     `Focus: ${search.focus}.`,
     `Set city to the venue's own city.`,
     `Write the note in English, even if the source is in Spanish.`,
@@ -213,6 +217,15 @@ async function requestOnce(payload: unknown, apiKey: string): Promise<unknown> {
     throw new Error(`Perplexity error: ${JSON.stringify(record.error).slice(0, 500)}`);
   }
   return data;
+}
+
+function longDate(date: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
 }
 
 function parseLeads(text: string, search: SearchSpec, sources: Source[]): Lead[] {

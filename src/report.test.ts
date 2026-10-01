@@ -68,7 +68,7 @@ test("card text is escaped", () => {
   assert.doesNotMatch(html, /A & B <Hotel>/);
 });
 
-test("already open venues stay out of the report", () => {
+test("venues must be unopened and at least 30 days out", () => {
   const report = buildReport(
     period,
     [
@@ -76,9 +76,12 @@ test("already open venues stay out of the report", () => {
       lead({ title: "Dated opening", status: "opening_soon", expectedOpening: "September 13, 2026" }),
       lead({ title: "Past month", status: "planned", expectedOpening: "September 2026" }),
       lead({ title: "Past quarter", status: "under_construction", expectedOpening: "Q3 2026" }),
-      lead({ title: "Still coming", status: "opening_soon", expectedOpening: "October 15, 2026" }),
+      lead({ title: "Too soon", status: "opening_soon", expectedOpening: "October 15, 2026" }),
       lead({ title: "This month", status: "planned", expectedOpening: "October 2026" }),
-      lead({ title: "Next quarter", status: "planned", expectedOpening: "Q4 2026" }),
+      lead({ title: "This quarter", status: "planned", expectedOpening: "Q4 2026" }),
+      lead({ title: "Twenty nine days", status: "opening_soon", expectedOpening: "2026-10-30" }),
+      lead({ title: "Thirty days", status: "opening_soon", expectedOpening: "2026-10-31" }),
+      lead({ title: "November", status: "planned", expectedOpening: "November 2026" }),
       lead({ title: "No date", status: "under_construction", expectedOpening: "unknown" }),
       lead({
         title: "Old building, new venue",
@@ -99,6 +102,6 @@ test("already open venues stay out of the report", () => {
 
   assert.deepEqual(
     report.leads.map((item) => item.title),
-    ["Still coming", "This month", "Next quarter", "No date", "Old building, new venue"],
+    ["Thirty days", "November", "No date", "Old building, new venue"],
   );
 });

@@ -65,7 +65,9 @@ await writeFile(`out/${period.key}.json`, JSON.stringify(report, null, 2));
 await writeFile(`out/${period.key}.html`, html);
 await writeFile(`out/${period.key}.txt`, text);
 
-console.log(`${report.leads.length} leads, ${removed} already open, ${failures.length} failed searches`);
+console.log(
+  `${report.leads.length} leads, ${removed} removed because they are already open or open in under 30 days, ${failures.length} failed searches`,
+);
 if (pricedCalls > 0) {
   console.log(`Perplexity cost reported on ${pricedCalls} calls: $${cost.toFixed(4)}`);
 }

@@ -36,11 +36,17 @@ export function buildReport(
   };
 }
 
+export const MIN_LEAD_DAYS = 30;
+
+export function minimumOpeningDay(asOf: Date): string {
+  return addDays(chicagoDay(asOf), MIN_LEAD_DAYS);
+}
+
 export function isStillUpcoming(lead: Lead, asOf: Date): boolean {
   if (lead.status === "opened" || lead.alreadyOpen) return false;
-  const deadline = openingDeadline(lead.expectedOpening);
-  if (!deadline) return true;
-  return deadline >= chicagoDay(asOf);
+  const earliest = earliestOpening(lead.expectedOpening);
+  if (!earliest) return true;
+  return earliest >= minimumOpeningDay(asOf);
 }
 
 export function renderText(report: Report): string {
@@ -188,7 +194,7 @@ const MONTH_NUMBERS: Record<string, number> = {
   december: 12,
 };
 
-function openingDeadline(value: string): string | null {
+function earliestOpening(value: string): string | null {
   const text = value.trim().toLowerCase().replace(/,/g, "");
   if (!text || text === "unknown") return null;
 
@@ -206,11 +212,11 @@ function openingDeadline(value: string): string | null {
   if (monthYear) {
     const month = MONTH_NUMBERS[monthYear[1] ?? ""];
     if (!month) return null;
-    return lastDay(Number(monthYear[2]), month);
+    return firstDay(Number(monthYear[2]), month);
   }
 
   const quarter = /^q([1-4])\s+(\d{4})$/.exec(text);
-  if (quarter) return lastDay(Number(quarter[2]), Number(quarter[1]) * 3);
+  if (quarter) return firstDay(Number(quarter[2]), (Number(quarter[1]) - 1) * 3 + 1);
 
   return null;
 }
@@ -220,6 +226,17 @@ function validDay(year: number, month: number, day: number): string | null {
   const last = Number(lastDay(year, month).slice(8));
   if (day > last) return null;
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function firstDay(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, "0")}-01`;
+}
+
+function addDays(isoDay: string, days: number): string {
+  const [year, month, day] = isoDay.split("-").map(Number);
+  const date = new Date(Date.UTC(year ?? 0, (month ?? 1) - 1, day ?? 1));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
 }
 
 function lastDay(year: number, month: number): string {
