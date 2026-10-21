@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { periodFromKey } from "./period.ts";
+import { isQuickServiceChain } from "./chains.ts";
 import { buildReport, renderHtml, renderText } from "./report.ts";
 import type { Lead } from "./types.ts";
 
@@ -104,4 +105,28 @@ test("venues must be unopened and at least 30 days out", () => {
     report.leads.map((item) => item.title),
     ["Thirty days", "November", "No date", "Old building, new venue"],
   );
+});
+
+test("national fast-food chains stay out of the report", () => {
+  const report = buildReport(
+    period,
+    [
+      lead({ title: "Taco Bell", expectedOpening: "2027-03-01" }),
+      lead({ title: "McDonald's — Frisco", expectedOpening: "2027-04-01" }),
+      lead({ title: "Wingstop", expectedOpening: "2027-05-01" }),
+      lead({ title: "The Knox", expectedOpening: "2027-06-01" }),
+      lead({ title: "Handies Douzo", expectedOpening: "2027-06-01" }),
+      lead({ title: "The Cooper Hotel", expectedOpening: "2027-06-01" }),
+      lead({ title: "A new listening bar", type: "nightclub", expectedOpening: "2027-08-01" }),
+    ],
+    [],
+    asOf,
+  );
+
+  assert.deepEqual(
+    report.leads.map((item) => item.title),
+    ["The Cooper Hotel", "A new listening bar"],
+  );
+  assert.equal(isQuickServiceChain("Chick-fil-A"), true);
+  assert.equal(isQuickServiceChain("White Castle"), true);
 });

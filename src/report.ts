@@ -1,3 +1,4 @@
+import { isQuickServiceChain } from "./chains.ts";
 import type { Lead, Period, SearchFailure, Source, VenueStatus, VenueType } from "./types.ts";
 import { REGIONS } from "./types.ts";
 
@@ -31,7 +32,7 @@ export function buildReport(
 ): Report {
   return {
     period,
-    leads: dedupeLeads(leads.filter((lead) => isStillUpcoming(lead, asOf))),
+    leads: dedupeLeads(leads.filter((lead) => isStillUpcoming(lead, asOf) && !isQuickServiceChain(lead.title))),
     failures,
   };
 }

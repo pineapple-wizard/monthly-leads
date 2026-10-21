@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { sendEmail } from "./email.ts";
 import { searchLeads } from "./perplexity.ts";
 import { periodFromKey, previousMonth } from "./period.ts";
+import { isQuickServiceChain } from "./chains.ts";
 import { buildReport, isStillUpcoming, renderHtml, renderText } from "./report.ts";
 import { SEARCHES } from "./searches.ts";
 import type { Lead, SearchFailure } from "./types.ts";
@@ -56,6 +57,7 @@ await mapPool(searches, concurrency, async (search) => {
 
 const asOf = new Date();
 const removed = leads.filter((lead) => !isStillUpcoming(lead, asOf)).length;
+const chains = leads.filter((lead) => isStillUpcoming(lead, asOf) && isQuickServiceChain(lead.title)).length;
 const report = buildReport(period, leads, failures, asOf);
 const html = renderHtml(report);
 const text = renderText(report);
@@ -66,7 +68,7 @@ await writeFile(`out/${period.key}.html`, html);
 await writeFile(`out/${period.key}.txt`, text);
 
 console.log(
-  `${report.leads.length} leads, ${removed} removed because they are already open or open in under 30 days, ${failures.length} failed searches`,
+  `${report.leads.length} leads, ${removed} removed because they are already open or open in under 30 days, ${chains} fast-food chains removed, ${failures.length} failed searches`,
 );
 if (pricedCalls > 0) {
   console.log(`Perplexity cost reported on ${pricedCalls} calls: $${cost.toFixed(4)}`);

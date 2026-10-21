@@ -1,0 +1,56 @@
+name: Daily liquor permits
+
+on:
+  schedule:
+    - cron: "0 8 * * *"
+      timezone: America/Chicago
+  workflow_dispatch:
+    inputs:
+      from:
+        description: "Start date YYYY-MM-DD. Leave empty for yesterday through today."
+        required: false
+        type: string
+
+concurrency:
+  group: daily-permits
+  cancel-in-progress: false
+
+jobs:
+  permits:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Fetch and email
+        env:
+          API_KEY_ID_TX_OPEN_DATA_PORTAL: ${{ secrets.API_KEY_ID_TX_OPEN_DATA_PORTAL }}
+          API_KEY_SECRET_TX_OPEN_DATA_PORTAL: ${{ secrets.API_KEY_SECRET_TX_OPEN_DATA_PORTAL }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          REPORT_TO: ${{ secrets.REPORT_TO }}
+          REPORT_FROM: ${{ secrets.REPORT_FROM }}
+          FROM: ${{ inputs.from }}
+        run: |
+          if [ -n "$FROM" ]; then
+            if ! [[ "$FROM" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+              echo "Start date must look like 2026-10-20."
+              exit 1
+            fi
+            npm run permits -- --from "$FROM"
+          else
+            npm run permits
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: liquor-permits-${{ inputs.from || 'latest' }}
+          path: out/permits-*
+          if-no-files-found: warn
