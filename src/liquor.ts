@@ -63,8 +63,10 @@ export type PermitList<T> = {
 };
 
 export function permitWindow(now = new Date(), fromKey?: string): PermitWindow {
-  const through = chicagoDay(now);
-  const from = fromKey ?? addDays(through, -1);
+  const today = chicagoDay(now);
+  const yesterday = addDays(today, -1);
+  const from = fromKey ?? yesterday;
+  const through = fromKey ? today : yesterday;
   assertRealDay(from, "Start date");
   if (from > through) {
     throw new Error("Start date cannot be after today.");

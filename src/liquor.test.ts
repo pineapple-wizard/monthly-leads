@@ -2,22 +2,25 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { cleanId, issuedQuery, pendingQuery, permitWindow, readIssued, readPending } from "./liquor.ts";
 
-test("a morning run covers yesterday through today", () => {
+test("a morning run covers yesterday only", () => {
   const window = permitWindow(new Date("2026-10-21T15:00:00Z"));
   assert.equal(window.from, "2026-10-20");
-  assert.equal(window.through, "2026-10-21");
-  assert.equal(window.before, "2026-10-22");
+  assert.equal(window.through, "2026-10-20");
+  assert.equal(window.before, "2026-10-21");
 });
 
 test("late evening Chicago is still that calendar day", () => {
   const window = permitWindow(new Date("2026-10-21T04:00:00Z"));
   assert.equal(window.from, "2026-10-19");
-  assert.equal(window.through, "2026-10-20");
+  assert.equal(window.through, "2026-10-19");
+  assert.equal(window.before, "2026-10-20");
 });
 
-test("an explicit start date cannot be after today or impossible", () => {
+test("an explicit start date runs through today and cannot be after today or impossible", () => {
   const window = permitWindow(new Date("2026-10-21T15:00:00Z"), "2026-10-01");
   assert.equal(window.from, "2026-10-01");
+  assert.equal(window.through, "2026-10-21");
+  assert.equal(window.before, "2026-10-22");
   assert.throws(() => permitWindow(new Date("2026-10-21T15:00:00Z"), "2026-10-22"), /after today/);
   assert.throws(() => permitWindow(new Date("2026-10-21T15:00:00Z"), "2026-02-31"), /2026-10-20/);
 });
@@ -26,7 +29,7 @@ test("the pending query uses the renamed application id column", () => {
   const query = pendingQuery(permitWindow(new Date("2026-10-21T15:00:00Z")));
   assert.match(query, /application_id/);
   assert.doesNotMatch(query, /applicationid/);
-  assert.match(query, /submission_date >= '2026-10-20' AND submission_date < '2026-10-22'/);
+  assert.match(query, /submission_date >= '2026-10-20' AND submission_date < '2026-10-21'/);
   assert.match(query, /subordinate_license_id IS NULL/);
 });
 

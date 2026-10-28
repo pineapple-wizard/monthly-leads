@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       from:
-        description: "Start date YYYY-MM-DD. Leave empty for yesterday through today."
+        description: "Start date YYYY-MM-DD. Leave empty for yesterday only. A date runs from that day through today."
         required: false
         type: string
 
